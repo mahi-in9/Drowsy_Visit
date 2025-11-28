@@ -1,3 +1,4 @@
+// routes/messageRoutes.js
 import express from "express";
 import { protect } from "../middlewares/auth.js";
 
@@ -11,19 +12,19 @@ import {
 
 const router = express.Router();
 
-// 🔹 Send message
+// 🔹 Send a new message
 router.post("/send", protect, sendMessage);
 
-// 🔹 Get messages of a chat
+// 🔹 Fetch messages of a chat (supports pagination)
 router.get("/:chatId", protect, getMessages);
 
-// 🔹 Edit message
+// 🔹 Edit a message (sender only)
 router.put("/edit", protect, editMessage);
 
-// 🔹 Delete message (for me / for everyone)
+// 🔹 Delete a message (for me / everyone)
 router.put("/delete", protect, deleteMessage);
 
-// 🔹 React to a message (emoji)
+// 🔹 React to a message (emoji reactions)
 router.put("/react", protect, reactToMessage);
 
 export default router;

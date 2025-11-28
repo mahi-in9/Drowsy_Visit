@@ -1,81 +1,110 @@
 // src/redux/slices/messageSlice.js
 import { createSlice } from "@reduxjs/toolkit";
-import { fetchMessages, sendMessageThunk } from "../thunks/messageThunks";
-
-const initialState = {
-  list: [],
-  loading: false,
-  error: null,
-};
+import {
+  sendMessageThunk,
+  fetchMessagesThunk,
+  editMessageThunk,
+  deleteMessageThunk,
+  reactToMessageThunk,
+} from "../thunks/messageThunks";
 
 const messageSlice = createSlice({
   name: "messages",
-  initialState,
+
+  initialState: {
+    data: {}, // { chatId: [messages] }
+    pagination: {}, // { chatId: { page, limit, total } }
+    loading: false,
+    error: null,
+  },
 
   reducers: {
-    addMessageRealtime(state, action) {
-      state.list.push(action.payload);
-    },
+    /* SOCKET: Add incoming message realtime */
+    addIncomingMessage: (state, action) => {
+      const msg = action.payload;
+      const chatId = msg.chat._id;
 
-    editMessageRealtime(state, action) {
-      const { messageId, newContent } = action.payload;
-      state.list = state.list.map((m) =>
-        m._id === messageId ? { ...m, content: newContent, edited: true } : m
-      );
-    },
+      if (!state.data[chatId]) state.data[chatId] = [];
 
-    deleteMessageRealtime(state, action) {
-      const { messageId, forEveryone } = action.payload;
-
-      state.list = state.list.map((msg) =>
-        msg._id === messageId
-          ? {
-              ...msg,
-              content: forEveryone ? "" : msg.content,
-              isDeletedForEveryone: forEveryone,
-            }
-          : msg
-      );
-    },
-
-    updateMessageReaction(state, action) {
-      const { messageId, emoji, userId } = action.payload;
-
-      state.list = state.list.map((msg) =>
-        msg._id === messageId
-          ? {
-              ...msg,
-              reactions: [{ emoji, user: userId }],
-            }
-          : msg
-      );
+      // Prevent duplicates
+      const exists = state.data[chatId].some((m) => m._id === msg._id);
+      if (!exists) state.data[chatId].push(msg);
     },
   },
 
   extraReducers: (builder) => {
+    /* FETCH MESSAGES ---------------------------------------- */
     builder
-      .addCase(fetchMessages.pending, (state) => {
+      .addCase(fetchMessagesThunk.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
-      .addCase(fetchMessages.fulfilled, (state, action) => {
+      .addCase(fetchMessagesThunk.fulfilled, (state, action) => {
         state.loading = false;
-        state.list = action.payload || [];
+
+        const { chatId, messages, pagination } = action.payload;
+
+        // filter invalid messages
+        const clean = messages.filter((m) => m && m.sender);
+
+        state.data[chatId] = clean;
+        state.pagination[chatId] = pagination;
       })
-      .addCase(fetchMessages.rejected, (state, action) => {
+      .addCase(fetchMessagesThunk.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload || "Failed to load messages";
-      })
-      .addCase(sendMessageThunk.fulfilled, (state, action) => {
-        state.list.push(action.payload);
+        state.error = action.payload;
       });
+
+    /* SEND MESSAGE ------------------------------------------- */
+    builder.addCase(sendMessageThunk.fulfilled, (state, action) => {
+      const msg = action.payload;
+      const chatId = msg.chat._id;
+
+      if (!state.data[chatId]) state.data[chatId] = [];
+
+      state.data[chatId].push(msg);
+    });
+
+    /* EDIT MESSAGE ------------------------------------------- */
+    builder.addCase(editMessageThunk.fulfilled, (state, action) => {
+      const updated = action.payload;
+      const chatId = updated.chat._id;
+
+      if (state.data[chatId]) {
+        state.data[chatId] = state.data[chatId].map((m) =>
+          m._id === updated._id ? updated : m
+        );
+      }
+    });
+
+    /* DELETE MESSAGE ---------------------------------------- */
+    builder.addCase(deleteMessageThunk.fulfilled, (state, action) => {
+      const { messageId, forEveryone } = action.payload;
+
+      for (const chatId in state.data) {
+        state.data[chatId] = state.data[chatId].map((m) =>
+          m._id === messageId
+            ? forEveryone
+              ? { ...m, content: "", isDeletedForEveryone: true }
+              : { ...m, deletedForMe: true } // front-end flag for display
+            : m
+        );
+      }
+    });
+
+    /* REACT MESSAGE ----------------------------------------- */
+    builder.addCase(reactToMessageThunk.fulfilled, (state, action) => {
+      const updated = action.payload;
+      const chatId = updated.chat._id;
+
+      if (state.data[chatId]) {
+        state.data[chatId] = state.data[chatId].map((m) =>
+          m._id === updated._id ? updated : m
+        );
+      }
+    });
   },
 });
 
-export const {
-  addMessageRealtime,
-  editMessageRealtime,
-  deleteMessageRealtime,
-  updateMessageReaction,
-} = messageSlice.actions;
-
+export const { addIncomingMessage } = messageSlice.actions;
 export default messageSlice.reducer;

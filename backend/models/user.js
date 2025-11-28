@@ -36,6 +36,10 @@ const userSchema = new mongoose.Schema(
       default: "user",
     },
 
+    followers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    following: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    profilePic: { type: String, default: "" },
+
     resetPasswordToken: String,
     resetPasswordExpire: Date,
   },

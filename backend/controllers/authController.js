@@ -8,7 +8,7 @@ import User from "../models/user.js";
 ================================= */
 export const register = async (req, res) => {
   try {
-    const { name, username, email, password } = req.body;
+    const { name, username, email, password, role } = req.body;
 
     // check username unique
     const usernameExist = await User.findOne({ username });
@@ -28,7 +28,7 @@ export const register = async (req, res) => {
       });
     }
 
-    const user = await User.create({ name, username, email, password });
+    const user = await User.create({ name, username, email, password, role });
 
     const token = jwt.sign(
       { id: user._id, role: user.role },
@@ -84,13 +84,18 @@ export const login = async (req, res) => {
       success: true,
       message: "Login successful",
       token,
-      user: { name: user.name, email: user.email, role: user.role },
+      user: {
+        _id: user._id,
+        name: user.name,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+      },
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
       message: "Server error",
-      error,
     });
   }
 };

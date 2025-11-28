@@ -1,73 +1,111 @@
-import { createSlice } from "@reduxjs/toolkit";
-import { loginUser, registerUser } from "../thunks/authThunks";
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import axios from "../../utils/axiosInstance";
 
-const initialState = {
-  user: JSON.parse(localStorage.getItem("user")) || null,
-  token: localStorage.getItem("token") || null,
-  loading: false,
-  error: null,
-};
+/* =====================================================
+   THUNKS
+====================================================== */
 
-const authSlice = createSlice({
-  name: "auth",
-  initialState,
+// Fetch all users
+export const fetchUsers = createAsyncThunk(
+  "users/fetchUsers",
+  async (search = "", { rejectWithValue }) => {
+    try {
+      const res = await axios.get(`/users/all?search=${search}`);
+      return res.data.users;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to load users"
+      );
+    }
+  }
+);
 
-  reducers: {
-    logout(state) {
-      state.user = null;
-      state.token = null;
-      localStorage.removeItem("user");
-      localStorage.removeItem("token");
-    },
+// Follow user
+export const followUser = createAsyncThunk(
+  "users/followUser",
+  async (targetUserId, { rejectWithValue }) => {
+    try {
+      await axios.put(`/users/follow/${targetUserId}`);
+      return targetUserId;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to follow user"
+      );
+    }
+  }
+);
+
+// Unfollow user
+export const unfollowUser = createAsyncThunk(
+  "users/unfollowUser",
+  async (targetUserId, { rejectWithValue }) => {
+    try {
+      await axios.put(`/users/unfollow/${targetUserId}`);
+      return targetUserId;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to unfollow user"
+      );
+    }
+  }
+);
+
+/* =====================================================
+   SLICE
+====================================================== */
+
+const userSlice = createSlice({
+  name: "users",
+  initialState: {
+    list: [],
+    loading: false,
+    error: null,
   },
 
+  reducers: {},
+
   extraReducers: (builder) => {
+    /* ---- FETCH USERS ---- */
     builder
-      /* LOGIN */
-      .addCase(loginUser.pending, (state) => {
+      .addCase(fetchUsers.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-
-      .addCase(loginUser.fulfilled, (state, action) => {
+      .addCase(fetchUsers.fulfilled, (state, action) => {
         state.loading = false;
-
-        // backend returns: { success, message, token, user }
-        state.user = action.payload.user;
-        state.token = action.payload.token;
-
-        localStorage.setItem("user", JSON.stringify(action.payload.user));
-        localStorage.setItem("token", action.payload.token);
+        state.list = action.payload; // store full user array
       })
-
-      .addCase(loginUser.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-
-      /* REGISTER */
-      .addCase(registerUser.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-
-      .addCase(registerUser.fulfilled, (state, action) => {
-        state.loading = false;
-
-        state.user = action.payload.user;
-        state.token = action.payload.token;
-
-        localStorage.setItem("user", JSON.stringify(action.payload.user));
-        localStorage.setItem("token", action.payload.token);
-      })
-
-      .addCase(registerUser.rejected, (state, action) => {
+      .addCase(fetchUsers.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });
+
+    /* ---- FOLLOW USER ---- */
+    builder.addCase(followUser.fulfilled, (state, action) => {
+      const userId = action.payload;
+
+      state.list = state.list.map((u) =>
+        u._id === userId
+          ? { ...u, isFollowing: true, followers: [...u.followers, "temp"] }
+          : u
+      );
+    });
+
+    /* ---- UNFOLLOW USER ---- */
+    builder.addCase(unfollowUser.fulfilled, (state, action) => {
+      const userId = action.payload;
+
+      state.list = state.list.map((u) =>
+        u._id === userId
+          ? {
+              ...u,
+              isFollowing: false,
+              followers: u.followers.filter(() => false),
+            }
+          : u
+      );
+    });
   },
 });
 
-export const { logout } = authSlice.actions;
-
-export default authSlice.reducer;
+export default userSlice.reducer;

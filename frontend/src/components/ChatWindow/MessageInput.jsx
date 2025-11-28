@@ -2,31 +2,59 @@
 import { useState } from "react";
 import { useDispatch } from "react-redux";
 import { sendMessageThunk } from "../../redux/thunks/messageThunks";
+import { getSocket } from "../../socket/socket";
 
 const MessageInput = ({ chatId }) => {
   const dispatch = useDispatch();
-  const [content, setContent] = useState("");
+  const [text, setText] = useState("");
 
-  const sendHandler = () => {
-    if (!content.trim()) return;
+  const send = async () => {
+    const trimmed = text.trim();
+    if (!trimmed || !chatId) return;
 
-    dispatch(sendMessageThunk({ chatId, content }));
-    setContent("");
+    // optimistic UI: create a temporary message object
+    const tempMsg = {
+      _id: `temp-${Date.now()}`,
+      chat: { _id: chatId },
+      sender: localStorage.getItem("userId"),
+      content: trimmed,
+      isEdited: false,
+      createdAt: new Date().toISOString(),
+      reactions: [],
+    };
+
+    // emit via socket immediately (if you want realtime)
+    const socket = getSocket();
+    if (socket && socket.connected) {
+      socket.emit("new_message", tempMsg);
+    }
+
+    // dispatch actual API send
+    try {
+      await dispatch(sendMessageThunk({ chatId, content: trimmed })).unwrap();
+    } catch (err) {
+      // handle send error (toast/log). For now console.warn
+      console.warn("send message failed:", err);
+    }
+
+    setText("");
   };
 
   return (
-    <div className="p-3 border-t bg-white dark:bg-gray-800 flex items-center gap-2">
+    <div className="p-3 bg-white flex items-center gap-2 border-t">
       <input
-        type="text"
-        placeholder="Message..."
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        className="flex-1 px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 text-sm outline-none"
+        placeholder="Type a message"
+        className="flex-1 bg-gray-100 rounded-full px-4 py-2 outline-none"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && send()}
+        aria-label="Message input"
       />
 
       <button
-        onClick={sendHandler}
-        className="px-4 py-2 bg-green-500 text-white rounded-full active:scale-95 transition"
+        onClick={send}
+        className="bg-blue-600 text-white px-4 py-2 rounded-full"
+        aria-label="Send message"
       >
         Send
       </button>

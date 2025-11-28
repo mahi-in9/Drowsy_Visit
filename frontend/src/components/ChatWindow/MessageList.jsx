@@ -1,45 +1,47 @@
+// src/components/ChatWindow/MessageList.jsx
 import { useEffect, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { fetchMessages } from "../../redux/thunks/messageThunks";
-import { addMessageRealtime } from "../../redux/slices/messageSlice";
-import { useSocket } from "../../hooks/useSocket";
+import { fetchMessagesThunk } from "../../redux/thunks/messageThunks";
+import { getSocket } from "../../socket/socket";
+import { addIncomingMessage } from "../../redux/slices/messageSlice";
 import MessageBubble from "./MessageBubble";
 
-const MessageList = () => {
-  const { selectedChat } = useSelector((state) => state.chats);
-  const { list } = useSelector((state) => state.messages);
+const MessageList = ({ chatId }) => {
   const dispatch = useDispatch();
-  const socket = useSocket();
-  const messagesEndRef = useRef(null);
+  const messagesMap = useSelector((s) => s.messages.data || {});
+  const messages = chatId ? messagesMap[chatId] || [] : [];
+  const socket = getSocket();
+  const endRef = useRef(null);
 
-  // Fetch messages
   useEffect(() => {
-    dispatch(fetchMessages(selectedChat._id));
-  }, [selectedChat]);
+    if (!chatId) return;
+    dispatch(fetchMessagesThunk({ chatId, page: 1, limit: 50 }));
+  }, [chatId, dispatch]);
 
-  // Receive new messages
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || !chatId) return;
 
-    socket.on("message_received", (msg) => {
-      dispatch(addMessageRealtime(msg));
-    });
+    const handler = (msg) => {
+      // ensure message belongs to current chat
+      if (msg?.chat?._id === chatId || msg?.chat === chatId) {
+        dispatch(addIncomingMessage(msg));
+      }
+    };
 
-    return () => socket.off("message_received");
-  }, [socket]);
+    socket.on("message_received", handler);
+    return () => socket.off("message_received", handler);
+  }, [socket, chatId, dispatch]);
 
-  // Auto scroll to bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [list]);
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length]);
 
   return (
     <div className="message-list">
-      {list.map((msg) => (
-        <MessageBubble key={msg._id} message={msg} />
+      {messages.map((m) => (
+        <MessageBubble key={m._id} msg={m} />
       ))}
-
-      <div ref={messagesEndRef} />
+      <div ref={endRef} />
     </div>
   );
 };

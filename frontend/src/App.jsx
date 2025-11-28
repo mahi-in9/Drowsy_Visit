@@ -2,10 +2,11 @@ import { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 
-import { connectSocket, disconnectSocket } from "./socket/socket";
+import { connectSocket } from "./socket/socket"; // ❗ remove disconnect here
 import ChatLayout from "./pages/ChatLayout";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import ExploreUsers from "./pages/ExploreUsers";
 
 /* -------------------------------
    PROTECTED ROUTE
@@ -26,10 +27,7 @@ const App = () => {
     if (user?._id) {
       connectSocket(user._id);
     }
-
-    return () => {
-      disconnectSocket();
-    };
+    // ❗ NO cleanup here; StrictMode causes double-fire and disconnects socket
   }, [user]);
 
   return (
@@ -39,6 +37,15 @@ const App = () => {
         element={
           <ProtectedRoute>
             <ChatLayout />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/explore"
+        element={
+          <ProtectedRoute>
+            <ExploreUsers />
           </ProtectedRoute>
         }
       />
